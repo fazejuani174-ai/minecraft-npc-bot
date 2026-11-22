@@ -7,7 +7,7 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 15
 
     steps:
       - name: Descargar repositorio
@@ -18,8 +18,23 @@ jobs:
         with:
           node-version: 22
 
+      - name: Comprobar versiones
+        run: |
+          node --version
+          npm --version
+          git --version
+
       - name: Instalar dependencias
-        run: npm install
+        timeout-minutes: 8
+        run: npm install --no-audit --no-fund
+
+      - name: Comprobar compatibilidad NeoForge
+        run: |
+          node -e "const p = require('minecraft-protocol-forge'); console.log('Exportaciones:', Object.keys(p)); if (typeof p.neoForgeHandshake !== 'function') process.exit(1); console.log('NeoForge handshake OK')"
 
       - name: Iniciar NPC
         run: npm start
+        env:
+          MC_HOST: ${{ secrets.MC_HOST }}
+          MC_PORT: ${{ secrets.MC_PORT }}
+          MC_USERNAME: ${{ secrets.MC_USERNAME }}
