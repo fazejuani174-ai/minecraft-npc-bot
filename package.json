@@ -5,10 +5,11 @@
   "private": true,
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "check": "node check.js"
   },
   "dependencies": {
     "mineflayer": "^4.0.0",
-    "minecraft-protocol-forge": "*"
+    "minecraft-protocol-forge": "github:enderliker/node-minecraft-protocol-forge#master"
   }
 }
