@@ -1,11 +1,22 @@
 
 const mineflayer = require('mineflayer')
-const { neoForgeHandshake } = require('minecraft-protocol-forge')
+
+const forge = require('minecraft-protocol-forge')
+
+console.log('[DEBUG] Exportaciones Forge:', Object.keys(forge))
+
+const neoForgeHandshake = forge.neoForgeHandshake
+
+if (typeof neoForgeHandshake !== 'function') {
+  throw new Error(
+    'No se ha encontrado neoForgeHandshake. Revisa la dependencia.'
+  )
+}
 
 const CONFIG = {
-  host: 'kageadventure.seedloaf.gg',
-  port: 25565,
-  username: 'ServidorNPC',
+  host: process.env.MC_HOST || 'kageadventure.seedloaf.gg',
+  port: Number(process.env.MC_PORT || 25565),
+  username: process.env.MC_USERNAME || 'ServidorNPC',
   version: '1.21.1',
   auth: 'offline',
   reconnectDelay: 25000,
@@ -16,16 +27,19 @@ let bot = null
 let reconnectTimer = null
 let routineTimer = null
 let busy = false
+let stopping = false
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 async function npcRoutine(currentBot) {
   if (busy || !currentBot.entity) return
-  busy = true
 
+  busy = true
   let chest = null
 
   try {
+    console.log('[NPC] Iniciando rutina')
+
     const block = currentBot.findBlock({
       matching: b => b.name === 'chest',
       maxDistance: 5
@@ -35,14 +49,16 @@ async function npcRoutine(currentBot) {
       console.log('[NPC] Cofre encontrado')
 
       chest = await currentBot.openChest(block)
-      console.log('[NPC] Cofre abierto')
 
+      console.log('[NPC] Cofre abierto')
       await sleep(2000)
 
       chest.close()
       chest = null
 
       console.log('[NPC] Cofre cerrado')
+    } else {
+      console.log('[NPC] No hay cofres cerca')
     }
 
     await sleep(1000)
@@ -51,22 +67,32 @@ async function npcRoutine(currentBot) {
       currentBot.setControlState('jump', true)
       await sleep(500)
       currentBot.setControlState('jump', false)
+
       console.log('[NPC] Salto completado')
     }
 
   } catch (err) {
     console.log('[NPC] Error:', err.message)
-    if (chest) chest.close()
+
+    if (chest) {
+      try {
+        chest.close()
+      } catch (_) {}
+    }
+
   } finally {
     if (currentBot.entity) {
       currentBot.setControlState('jump', false)
     }
+
     busy = false
   }
 }
 
 function createBot() {
-  console.log('[NPC] Conectando al servidor...')
+  if (stopping) return
+
+  console.log('[NPC] Conectando a Kage Adventure...')
 
   const currentBot = mineflayer.createBot({
     host: CONFIG.host,
@@ -78,16 +104,26 @@ function createBot() {
 
   bot = currentBot
 
-  neoForgeHandshake(currentBot._client, {
-    autoNegotiate: true
-  })
+  try {
+    neoForgeHandshake(currentBot._client, {
+      autoNegotiate: true
+    })
+
+    console.log('[NPC] Negociación NeoForge preparada')
+
+  } catch (err) {
+    console.log('[NPC] Error en handshake:', err)
+    currentBot.quit()
+    return
+  }
 
   currentBot.once('spawn', () => {
-    console.log('[NPC] ¡CONECTADO A KAGE ADVENTURE!')
+    console.log('[NPC] CONECTADO A KAGE ADVENTURE')
 
     if (routineTimer) clearInterval(routineTimer)
 
     busy = false
+
     npcRoutine(currentBot)
 
     routineTimer = setInterval(() => {
@@ -116,9 +152,12 @@ function createBot() {
     routineTimer = null
 
     busy = false
+
     if (bot === currentBot) bot = null
 
-    if (!reconnectTimer) {
+    if (!stopping && !reconnectTimer) {
+      console.log('[NPC] Reconectando en 25 segundos')
+
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null
         createBot()
@@ -127,7 +166,18 @@ function createBot() {
   })
 }
 
-createBot()
+function shutdown() {
+  stopping = true
 
+  if (routineTimer) clearInterval(routineTimer)
+  if (reconnectTimer) clearTimeout(reconnectTimer)
+
+  if (bot) bot.quit('NPC apagándose')
+
+  setTimeout(() => process.exit(0), 1000)
+}
+
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
 
 createBot()
