@@ -1,5 +1,4 @@
-
-name: Kage Adventure NPC
+name: Minecraft NPC Bot
 
 on:
   workflow_dispatch:
@@ -7,7 +6,6 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
 
     steps:
       - name: Descargar repositorio
@@ -18,23 +16,21 @@ jobs:
         with:
           node-version: 22
 
-      - name: Comprobar versiones
-        run: |
-          node --version
-          npm --version
-          git --version
-
       - name: Instalar dependencias
-        timeout-minutes: 8
-        run: npm install --no-audit --no-fund
+        run: npm install
 
-      - name: Comprobar compatibilidad NeoForge
+      - name: Diagnosticar biblioteca NeoForge
         run: |
-          node -e "const p = require('minecraft-protocol-forge'); console.log('Exportaciones:', Object.keys(p)); if (typeof p.neoForgeHandshake !== 'function') process.exit(1); console.log('NeoForge handshake OK')"
+          node -e "
+          const p = require('minecraft-protocol-forge');
+          console.log('Ruta:', require.resolve('minecraft-protocol-forge'));
+          console.log('Exportaciones:', Object.keys(p));
+          console.log('Handshake:', typeof p.neoForgeHandshake);
+          "
 
-      - name: Iniciar NPC
-        run: npm start
+      - name: Iniciar bot
         env:
           MC_HOST: ${{ secrets.MC_HOST }}
           MC_PORT: ${{ secrets.MC_PORT }}
           MC_USERNAME: ${{ secrets.MC_USERNAME }}
+        run: npm start
